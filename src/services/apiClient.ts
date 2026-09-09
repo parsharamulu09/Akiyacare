@@ -18,6 +18,7 @@ import {
   Ambulance,
   HouseholdSurvey,
   Referral,
+  DischargeRecord,
   NotificationItem,
   VillageHealthIndex,
   Patient
@@ -168,6 +169,22 @@ export const apiClient = {
   updateAppointment: async (id: string, data: Partial<Appointment>): Promise<{ success: boolean; appointment: Appointment; error?: string }> => {
     return apiFetch(`/api/appointments/${id}`, {
       method: 'PUT',
+      body: JSON.stringify(data)
+    });
+  },
+
+  getDischarges: async (doctorId?: string): Promise<{ success: boolean; discharges: DischargeRecord[]; error?: string }> => {
+    const query = doctorId ? `?doctorId=${encodeURIComponent(doctorId)}` : '';
+    return apiFetch(`/api/discharges${query}`);
+  },
+
+  getPatientDischarges: async (patientId: string): Promise<{ success: boolean; discharges: DischargeRecord[]; error?: string }> => {
+    return apiFetch(`/api/discharges/patient/${encodeURIComponent(patientId)}`);
+  },
+
+  dischargeAppointment: async (id: string, data: { diagnosis?: string; treatmentSummary?: string; followUpDate?: string; followUpInstructions?: string; doctorId?: string }): Promise<{ success: boolean; discharge: DischargeRecord; error?: string }> => {
+    return apiFetch(`/api/appointments/${id}/discharge`, {
+      method: 'POST',
       body: JSON.stringify(data)
     });
   },

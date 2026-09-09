@@ -13,19 +13,28 @@ import {
   Plus,
   Trash2,
   Activity,
-  Heart
+  Heart,
+  Eye,
+  X
 } from 'lucide-react';
-import { Appointment, Prescription, Referral } from '../../types';
+import { Appointment, DischargeRecord, Referral } from '../../types';
 import { TranslationDict } from '../../utils/teluguTranslations';
 import { apiClient } from '../../services/apiClient';
+import { useAuth } from '../../context/AuthContext';
 
 interface DoctorDashboardProps {
   t: TranslationDict;
 }
 
 export const DoctorDashboard: React.FC<DoctorDashboardProps> = ({ t }) => {
+  const { user } = useAuth();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [referrals, setReferrals] = useState<Referral[]>([]);
+  const [discharges, setDischarges] = useState<DischargeRecord[]>([]);
+  const [activeTab, setActiveTab] = useState<'ASHA_CASES' | 'APPOINTMENTS' | 'DISCHARGED'>('APPOINTMENTS');
+  const [selectedDischarge, setSelectedDischarge] = useState<DischargeRecord | null>(null);
+  const [isLoadingDischarges, setIsLoadingDischarges] = useState(false);
+  const [dischargeError, setDischargeError] = useState<string | null>(null);
   const [selectedPatientId, setSelectedPatientId] = useState<string>('pat-1');
   const [selectedPatientName, setSelectedPatientName] = useState<string>('Ravi Kumar');
   const [isVideoActive, setIsVideoActive] = useState(false);
@@ -47,13 +56,45 @@ export const DoctorDashboard: React.FC<DoctorDashboardProps> = ({ t }) => {
 
   const loadData = async () => {
     try {
-      const aRes = await apiClient.getAppointments();
+      const doctorId = user?.doctorId || 'doc-1';
+      const aRes = await apiClient.getAppointments({ doctorId });
       if (aRes.success) setAppointments(aRes.appointments);
 
       const rRes = await apiClient.getReferrals();
       if (rRes.success) setReferrals(rRes.referrals);
+
+      await loadDischarges(doctorId);
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const loadDischarges = async (doctorId = user?.doctorId || 'doc-1') => {
+    setIsLoadingDischarges(true);
+    setDischargeError(null);
+    try {
+      const response = await apiClient.getDischarges(doctorId);
+      if (response.success) setDischarges(response.discharges);
+      else setDischargeError(response.error || 'Unable to load discharged patients.');
+    } catch (err) {
+      console.error(err);
+      setDischargeError('Unable to load discharged patients.');
+    } finally {
+      setIsLoadingDischarges(false);
+    }
+  };
+
+  const handleDischarge = async (appointment: Appointment) => {
+    const response = await apiClient.dischargeAppointment(appointment.id, {
+      diagnosis,
+      treatmentSummary: instructions,
+      followUpDate: new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString(),
+      followUpInstructions: instructions
+    });
+    if (response.success) {
+      setAppointments(current => current.map(item => item.id === appointment.id ? response.discharge.status === 'DISCHARGED' ? { ...item, status: 'DISCHARGED' } : item : item));
+      setDischarges(current => [response.discharge, ...current.filter(item => item.id !== response.discharge.id)]);
+      setActiveTab('DISCHARGED');
     }
   };
 
@@ -158,7 +199,53 @@ export const DoctorDashboard: React.FC<DoctorDashboardProps> = ({ t }) => {
         )}
       </div>
 
-      {/* Main Grid: Patient Queue + Prescription Writer */}
+      <div className="flex flex-wrap gap-2 border-b border-slate-200">
+        {[
+          { id: 'ASHA_CASES', label: 'ASHA Cases', icon: Users },
+          { id: 'APPOINTMENTS', label: 'Appointments', icon: Calendar },
+          { id: 'DISCHARGED', label: 'Discharged', icon: CheckCircle2 }
+        ].map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => {
+              setActiveTab(id as typeof activeTab);
+              if (id === 'DISCHARGED') loadDischarges();
+            }}
+            className={`px-4 py-2.5 rounded-t-xl text-sm font-bold flex items-center gap-2 border-b-2 transition-colors ${activeTab === id ? 'border-blue-600 text-blue-700 bg-blue-50' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+          >
+            <Icon className="w-4 h-4" />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'DISCHARGED' ? (
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-black text-slate-900">Discharged Patients</h2>
+              <p className="text-sm text-slate-500">Patients discharged from your consultations</p>
+            </div>
+            <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1 rounded-lg text-xs font-bold">{discharges.length} cases</span>
+          </div>
+          {isLoadingDischarges && <div className="p-8 text-center text-sm text-slate-500 bg-white rounded-2xl border border-slate-200">Loading discharged patients...</div>}
+          {dischargeError && <div className="p-4 text-sm text-rose-700 bg-rose-50 rounded-2xl border border-rose-200">{dischargeError}</div>}
+          {!isLoadingDischarges && !dischargeError && discharges.length === 0 && <div className="p-10 text-center bg-white rounded-2xl border border-dashed border-slate-300"><CheckCircle2 className="w-8 h-8 mx-auto text-slate-300" /><p className="mt-2 font-bold text-slate-700">No discharged patients yet</p><p className="text-sm text-slate-500 mt-1">Discharged cases will appear here after you complete a consultation.</p></div>}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {discharges.map(discharge => (
+              <button key={discharge.id} type="button" onClick={() => setSelectedDischarge(discharge)} className="text-left bg-white rounded-2xl border border-slate-200 p-5 hover:border-blue-400 transition-colors">
+                <div className="flex items-start justify-between gap-3"><div><h3 className="font-black text-slate-900">{discharge.patientName}</h3><p className="text-xs text-slate-500 mt-1">Health ID: {discharge.healthId || discharge.patientId} {discharge.patientAge ? `• ${discharge.patientAge} yrs` : ''} {discharge.patientGender ? `• ${discharge.patientGender}` : ''}</p></div><span className="text-[10px] font-black text-emerald-700 bg-emerald-50 px-2 py-1 rounded-md">DISCHARGED</span></div>
+                <p className="text-sm text-slate-700 mt-4"><span className="font-bold">Case:</span> {discharge.originalCase || 'Consultation'}</p>
+                <p className="text-sm text-slate-700 mt-1"><span className="font-bold">Assessment:</span> {discharge.diagnosis || 'Not recorded'}</p>
+                <p className="text-xs text-slate-500 mt-3">Discharged {new Date(discharge.dischargeDate).toLocaleDateString()} {discharge.followUpDate ? `• Follow-up ${new Date(discharge.followUpDate).toLocaleDateString()}` : ''}</p>
+                <span className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-blue-700"><Eye className="w-3.5 h-3.5" /> View details</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : (
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
         {/* Left Column: Scheduled Appointments Queue */}
@@ -203,7 +290,7 @@ export const DoctorDashboard: React.FC<DoctorDashboardProps> = ({ t }) => {
                       <span className="text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded-md">
                         {appt.type}
                       </span>
-                      <span className="text-emerald-700 font-semibold">{appt.status}</span>
+                      <div className="flex items-center gap-2"><span className="text-emerald-700 font-semibold">{appt.status}</span>{appt.status !== 'DISCHARGED' && <button type="button" onClick={(event) => { event.stopPropagation(); handleDischarge(appt); }} className="text-[10px] font-bold text-blue-700 hover:text-blue-900">Discharge</button>}</div>
                     </div>
                   </div>
                 );
@@ -371,6 +458,17 @@ export const DoctorDashboard: React.FC<DoctorDashboardProps> = ({ t }) => {
         </div>
 
       </div>
+
+      )}
+
+      {selectedDischarge && (
+        <div className="fixed inset-0 z-50 bg-slate-950/40 p-4 flex items-center justify-center" onClick={() => setSelectedDischarge(null)}>
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6" onClick={event => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-4"><div><h2 className="text-xl font-black text-slate-900">{selectedDischarge.patientName}</h2><p className="text-sm text-slate-500 mt-1">{selectedDischarge.patientAge ? `${selectedDischarge.patientAge} yrs` : 'Age unavailable'} {selectedDischarge.patientGender ? `• ${selectedDischarge.patientGender}` : ''} • {selectedDischarge.patientId}</p></div><button type="button" onClick={() => setSelectedDischarge(null)} className="p-2 text-slate-400 hover:text-slate-800"><X className="w-5 h-5" /></button></div>
+            <div className="mt-5 space-y-4 text-sm"><div><span className="font-bold text-slate-700">Original case</span><p className="text-slate-600 mt-1">{selectedDischarge.originalCase || 'Not recorded'}</p></div><div><span className="font-bold text-slate-700">Diagnosis / assessment</span><p className="text-slate-600 mt-1">{selectedDischarge.diagnosis || 'Not recorded'}</p></div><div><span className="font-bold text-slate-700">Treatment summary</span><p className="text-slate-600 mt-1">{selectedDischarge.treatmentSummary || 'Not recorded'}</p></div><div><span className="font-bold text-slate-700">Follow-up instructions</span><p className="text-slate-600 mt-1">{selectedDischarge.followUpInstructions || 'Not recorded'}</p></div><div className="grid grid-cols-2 gap-3 text-xs"><div className="bg-slate-50 rounded-xl p-3"><span className="text-slate-500">Discharge date</span><strong className="block mt-1">{new Date(selectedDischarge.dischargeDate).toLocaleDateString()}</strong></div><div className="bg-slate-50 rounded-xl p-3"><span className="text-slate-500">Follow-up date</span><strong className="block mt-1">{selectedDischarge.followUpDate ? new Date(selectedDischarge.followUpDate).toLocaleDateString() : 'Not set'}</strong></div></div><p className="text-xs text-slate-500">Prescription: {selectedDischarge.prescriptionId ? 'Available in patient records' : 'None recorded'}</p></div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

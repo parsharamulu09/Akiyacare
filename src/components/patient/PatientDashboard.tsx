@@ -17,7 +17,7 @@ import {
   MessageSquare,
   CheckCircle2
 } from 'lucide-react';
-import { Patient, Appointment, Prescription, MedicalRecord } from '../../types';
+import { Patient, Appointment, Prescription, MedicalRecord, DischargeRecord } from '../../types';
 import { TranslationDict } from '../../utils/teluguTranslations';
 import { apiClient } from '../../services/apiClient';
 import { useAuth } from '../../context/AuthContext';
@@ -38,6 +38,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
   const [records, setRecords] = useState<MedicalRecord[]>([]);
+  const [discharges, setDischarges] = useState<DischargeRecord[]>([]);
   const [assistantMessage, setAssistantMessage] = useState('');
   const [chatHistory, setChatHistory] = useState<Array<{ role: 'user' | 'assistant'; text: string }>>([
     {
@@ -66,6 +67,9 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
 
       const prRes = await apiClient.getPrescriptions(targetId);
       if (prRes.success) setPrescriptions(prRes.prescriptions);
+
+      const dRes = await apiClient.getPatientDischarges(targetId);
+      if (dRes.success) setDischarges(dRes.discharges);
     } catch (err) {
       console.error(err);
     }
@@ -404,6 +408,15 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
               ))}
             </div>
           </div>
+
+          {discharges.map(discharge => (
+            <div key={discharge.id} className="bg-emerald-50 rounded-3xl border border-emerald-200 p-6 shadow-xs">
+              <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2"><CheckCircle2 className="w-5 h-5 text-emerald-700" /><h3 className="font-extrabold text-base text-slate-900">Discharge Summary</h3></div><span className="text-[11px] font-black text-emerald-800 bg-white px-2 py-1 rounded-md">DISCHARGED</span></div>
+              <p className="text-xs text-slate-600 mt-3">{discharge.diagnosis || 'Consultation completed'} • {new Date(discharge.dischargeDate).toLocaleDateString()}</p>
+              {discharge.treatmentSummary && <p className="text-sm text-slate-700 mt-2"><span className="font-bold">Treatment and instructions:</span> {discharge.treatmentSummary}</p>}
+              {discharge.followUpDate && <p className="text-xs text-emerald-800 font-bold mt-3">Follow-up: {new Date(discharge.followUpDate).toLocaleDateString()}</p>}
+            </div>
+          ))}
 
         </div>
 
