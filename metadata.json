@@ -1,0 +1,7 @@
+{
+  "name": "AikyaCare",
+  "description": "Rural AI Health Triage & Emergency Care Platform for underserved communities with layered danger-sign engine, offline triage, and multi-role healthcare coordination.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
