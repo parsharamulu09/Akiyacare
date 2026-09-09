@@ -23,14 +23,12 @@ import { apiClient } from '../../services/apiClient';
 import { useAuth } from '../../context/AuthContext';
 
 interface PatientDashboardProps {
-  onOpenTriage: () => void;
   onOpenSos: () => void;
   onOpenReportSummarizer: () => void;
   t: TranslationDict;
 }
 
 export const PatientDashboard: React.FC<PatientDashboardProps> = ({
-  onOpenTriage,
   onOpenSos,
   onOpenReportSummarizer,
   t
@@ -115,6 +113,23 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
   const villageDisplay = patient?.villageName || (patient as any)?.village || 'Kothur Gramam';
   const districtDisplay = (patient as any)?.district || 'Warangal Rural';
 
+  const healthCases = [
+    {
+      caseId: 'AKC-2409-YEL-01',
+      reportedBy: 'ASHA Worker',
+      symptoms: 'Fever, cough, fatigue',
+      triage: 'YELLOW',
+      specialist: 'General Physician',
+      recommendedAction: 'Book a doctor consultation',
+      status: 'ASHA case received',
+      date: 'Sep 10, 2026',
+      asha: 'Padmavati',
+      village: villageDisplay,
+      vitals: 'SpO2 97%, Heart Rate 84 bpm',
+      assessment: 'AI-assisted symptom understanding suggests moderate concern, routine assessment and doctor consultation.',
+    }
+  ];
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       
@@ -167,14 +182,6 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
 
           {/* Core Action CTAs */}
           <div className="flex flex-wrap items-center gap-2.5">
-            <button
-              onClick={onOpenTriage}
-              className="flex-1 sm:flex-none px-4 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold text-xs sm:text-sm shadow-md shadow-teal-600/20 flex items-center justify-center gap-2 cursor-pointer transition-all"
-            >
-              <Stethoscope className="w-4 h-4" />
-              <span>{t.checkSymptoms}</span>
-            </button>
-
             <button
               onClick={onOpenReportSummarizer}
               className="flex-1 sm:flex-none px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-xs sm:text-sm shadow-md shadow-purple-600/20 flex items-center justify-center gap-2 cursor-pointer transition-all"
@@ -241,6 +248,52 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
           </div>
         </div>
       </div>
+
+      {/* My Health Cases sourced from ASHA Worker workflow */}
+      <section className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <Stethoscope className="w-5 h-5 text-teal-700" />
+            <h3 className="font-extrabold text-base text-slate-900">My Health Cases</h3>
+          </div>
+          <span className="text-[11px] font-bold text-teal-700 bg-teal-50 border border-teal-200 px-2 py-1 rounded-full">Reported by ASHA Worker</span>
+        </div>
+
+        <div className="mt-4 space-y-3">
+          {healthCases.map((caseItem, index) => (
+            <div key={index} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-xs font-bold text-slate-500">{caseItem.caseId} • {caseItem.date}</div>
+                  <div className="text-sm font-extrabold text-slate-900 mt-1">{caseItem.symptoms}</div>
+                </div>
+                <div className="text-right">
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-black bg-amber-100 text-amber-800 border border-amber-300">{caseItem.triage}</span>
+                </div>
+              </div>
+
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-slate-600">
+                <div><span className="font-bold text-slate-800">ASHA Worker:</span> {caseItem.asha}</div>
+                <div><span className="font-bold text-slate-800">Village:</span> {caseItem.village}</div>
+                <div><span className="font-bold text-slate-800">Vitals:</span> {caseItem.vitals}</div>
+                <div><span className="font-bold text-slate-800">Status:</span> {caseItem.status}</div>
+                <div className="sm:col-span-2">
+                  <span className="font-bold text-slate-800">Symptoms reported by ASHA:</span> {caseItem.symptoms}
+                </div>
+                <div className="sm:col-span-2">
+                  <span className="font-bold text-slate-800">Preliminary assessment:</span> {caseItem.assessment}
+                </div>
+                <div className="sm:col-span-2">
+                  <span className="font-bold text-slate-800">Recommended specialist:</span> {caseItem.specialist}
+                </div>
+                <div className="sm:col-span-2">
+                  <span className="font-bold text-slate-800">Recommended action:</span> {caseItem.recommendedAction}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
 
       {/* Main Grid: Appointments & Prescriptions + AI Companion */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
