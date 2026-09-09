@@ -20,6 +20,7 @@ import {
 import { Patient, Appointment, Prescription, MedicalRecord } from '../../types';
 import { TranslationDict } from '../../utils/teluguTranslations';
 import { apiClient } from '../../services/apiClient';
+import { useAuth } from '../../context/AuthContext';
 
 interface PatientDashboardProps {
   onOpenTriage: () => void;
@@ -34,6 +35,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
   onOpenReportSummarizer,
   t
 }) => {
+  const { user } = useAuth();
   const [patient, setPatient] = useState<Patient | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
@@ -42,7 +44,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
   const [chatHistory, setChatHistory] = useState<Array<{ role: 'user' | 'assistant'; text: string }>>([
     {
       role: 'assistant',
-      text: 'Namaste Ravi garu! I am your AikyaCare health companion. You can ask me questions about your medications, diet for hypertension, or symptoms.'
+      text: `Namaste ${user?.name || 'Ravi'} garu! I am your AikyaCare health companion. You can ask me questions about your medications, diet for hypertension, or symptoms.`
     }
   ]);
   const [isChatLoading, setIsChatLoading] = useState(false);
@@ -51,17 +53,20 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [user]);
 
   const loadData = async () => {
     try {
-      const pRes = await apiClient.getPatient('pat-1');
-      if (pRes.success) setPatient(pRes.patient);
+      const targetId = user?.patientId || 'pat-1';
+      const pRes = await apiClient.getPatient(targetId);
+      if (pRes.success && pRes.patient) {
+        setPatient(pRes.patient);
+      }
 
-      const aRes = await apiClient.getAppointments({ patientId: 'pat-1' });
+      const aRes = await apiClient.getAppointments({ patientId: targetId });
       if (aRes.success) setAppointments(aRes.appointments);
 
-      const prRes = await apiClient.getPrescriptions('pat-1');
+      const prRes = await apiClient.getPrescriptions(targetId);
       if (prRes.success) setPrescriptions(prRes.prescriptions);
     } catch (err) {
       console.error(err);
@@ -78,9 +83,11 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
     setIsChatLoading(true);
 
     try {
+      const conditions = (patient?.chronicConditions || []).join(', ') || 'None';
+      const meds = (patient?.currentMeds || []).join(', ') || 'None';
       const res = await apiClient.askAssistant(
         userMsg,
-        `Patient: Ravi Kumar, Age: 48, Chronic: Hypertension, Current Meds: Amlodipine 5mg`
+        `Patient: ${patient?.name || user?.name || 'Ravi Kumar'}, Age: ${patient?.age || 48}, Chronic: ${conditions}, Current Meds: ${meds}`
       );
       if (res.success) {
         setChatHistory(prev => [...prev, { role: 'assistant', text: res.reply }]);
@@ -95,6 +102,19 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
     }
   };
 
+  const initials = (patient?.name || user?.name || 'Ravi Kumar')
+    .split(' ')
+    .map(n => n[0])
+    .filter(Boolean)
+    .join('')
+    .substring(0, 2)
+    .toUpperCase() || 'PT';
+
+  const conditionsList = patient?.chronicConditions || [];
+  const allergiesList = patient?.allergies || [];
+  const villageDisplay = patient?.villageName || (patient as any)?.village || 'Kothur Gramam';
+  const districtDisplay = (patient as any)?.district || 'Warangal Rural';
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       
@@ -104,27 +124,43 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
           
           <div className="flex items-start sm:items-center gap-4">
             <div className="w-16 h-16 rounded-2xl bg-teal-600 text-white font-black text-2xl flex items-center justify-center shadow-md shrink-0">
-              RK
+              {initials}
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-xl sm:text-2xl font-black text-slate-900">
-                  {patient?.name || 'Ravi Kumar'}
+                  {patient?.name || user?.name || 'Ravi Kumar'}
                 </h1>
                 <span className="bg-teal-50 text-teal-700 text-xs font-bold px-2.5 py-0.5 rounded-full border border-teal-200">
-                  ABHA: 91-4401-5678-9012
+                  ABHA: {(patient as any)?.abhaId || '91-4401-5678-9012'}
                 </span>
               </div>
               <p className="text-xs sm:text-sm text-slate-500 mt-1">
-                48 yrs, Male • Kothur Gramam, Warangal Rural • Blood Group: <span className="font-bold text-slate-700">B+</span>
+                {patient?.age || 48} yrs, {patient?.gender || 'Male'} • {villageDisplay}, {districtDisplay} • Blood Group: <span className="font-bold text-slate-700">{patient?.bloodGroup || 'B+'}</span>
               </p>
               <div className="flex flex-wrap gap-2 mt-2 text-xs">
-                <span className="bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-md font-semibold">
-                  Known Condition: Hypertension
-                </span>
-                <span className="bg-rose-50 text-rose-800 border border-rose-200 px-2 py-0.5 rounded-md font-semibold">
-                  Allergy: Penicillin
-                </span>
+                {conditionsList.length > 0 ? (
+                  conditionsList.map((cond, idx) => (
+                    <span key={idx} className="bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-md font-semibold">
+                      Condition: {cond}
+                    </span>
+                  ))
+                ) : (
+                  <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-md font-semibold">
+                    No Known Chronic Conditions
+                  </span>
+                )}
+                {allergiesList.length > 0 ? (
+                  allergiesList.map((allg, idx) => (
+                    <span key={idx} className="bg-rose-50 text-rose-800 border border-rose-200 px-2 py-0.5 rounded-md font-semibold">
+                      Allergy: {allg}
+                    </span>
+                  ))
+                ) : (
+                  <span className="bg-slate-50 text-slate-600 border border-slate-200 px-2 py-0.5 rounded-md font-semibold">
+                    No Known Allergies
+                  </span>
+                )}
               </div>
             </div>
           </div>

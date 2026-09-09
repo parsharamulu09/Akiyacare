@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { Navbar } from './components/common/Navbar';
 import { EmergencyModal } from './components/common/EmergencyModal';
 import { NotificationDrawer } from './components/common/NotificationDrawer';
@@ -11,14 +12,16 @@ import { DoctorDashboard } from './components/doctor/DoctorDashboard';
 import { AmbulanceDashboard } from './components/ambulance/AmbulanceDashboard';
 import { HospitalDashboard } from './components/hospital/HospitalDashboard';
 import { AdminDashboard } from './components/admin/AdminDashboard';
+import { AuthModal } from './components/auth/AuthModal';
 import { teluguTranslations } from './utils/teluguTranslations';
 import { offlineSyncEngine, ConnectivityState } from './services/offlineSync';
 import { apiClient } from './services/apiClient';
 import { UserRole, NotificationItem } from './types';
-import { ShieldCheck, HeartPulse, Sparkles } from 'lucide-react';
+import { ShieldCheck, HeartPulse, ShieldAlert, X } from 'lucide-react';
 
-export default function App() {
-  const [currentRole, setCurrentRole] = useState<UserRole | 'LANDING'>('LANDING');
+function AikyaCareMain() {
+  const { user, isAuthenticated, currentRole, setCurrentRole, canAccessRole } = useAuth();
+
   const [language, setLanguage] = useState<'en' | 'te'>('en');
   const [connectivity, setConnectivity] = useState<ConnectivityState>(offlineSyncEngine.getStatus());
   const [pendingSyncCount, setPendingSyncCount] = useState<number>(offlineSyncEngine.getPendingQueue().length);
@@ -29,6 +32,12 @@ export default function App() {
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isNotifDrawerOpen, setIsNotifDrawerOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+
+  // Authentication Modal state
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalRole, setAuthModalRole] = useState<UserRole>('PATIENT');
+  const [authModalMode, setAuthModalMode] = useState<'SIGN_IN' | 'SIGN_UP'>('SIGN_IN');
+  const [accessDeniedMessage, setAccessDeniedMessage] = useState<string | null>(null);
   
   // Emergency parameters passed from triage if triggered
   const [sosSymptoms, setSosSymptoms] = useState<string | undefined>(undefined);
@@ -76,18 +85,51 @@ export default function App() {
     setIsSosOpen(true);
   };
 
+  const handleOpenAuth = (role?: UserRole, mode?: 'SIGN_IN' | 'SIGN_UP') => {
+    if (role) setAuthModalRole(role);
+    if (mode) setAuthModalMode(mode);
+    setIsAuthModalOpen(true);
+  };
+
+  const handleSelectRole = (targetRole: UserRole | 'LANDING') => {
+    setAccessDeniedMessage(null);
+
+    if (targetRole === 'LANDING') {
+      setCurrentRole('LANDING');
+      return;
+    }
+
+    if (!isAuthenticated) {
+      // Prompt sign in for the requested dashboard
+      setAuthModalRole(targetRole);
+      setAuthModalMode('SIGN_IN');
+      setIsAuthModalOpen(true);
+      return;
+    }
+
+    if (canAccessRole(targetRole)) {
+      setCurrentRole(targetRole);
+    } else {
+      setAccessDeniedMessage(
+        `Access Denied: Your current account role '${user?.role}' does not have permission to access the '${targetRole}' dashboard. Each stakeholder role maintains strictly separated privileges.`
+      );
+    }
+  };
+
   // Guided Interactive Demos
   const handleLaunchScenario1 = () => {
-    // Scenario 1: Critical Chest Pain -> Red SOS -> Ambulance Dispatch
     setSosSymptoms('Severe crushing chest pain radiating to left arm, heavy sweating, dyspnea');
     setSosDangerSigns(['Severe Chest Pain', 'Acute Dyspnea']);
     setIsSosOpen(true);
   };
 
   const handleLaunchScenario2 = () => {
-    // Scenario 2: ASHA Offline in remote village -> Local Triage -> Sync Queue
-    offlineSyncEngine.toggleOfflineSimulation(true); // Force offline
-    setCurrentRole('HEALTH_WORKER');
+    offlineSyncEngine.toggleOfflineSimulation(true);
+    if (isAuthenticated && user?.role === 'HEALTH_WORKER') {
+      setCurrentRole('HEALTH_WORKER');
+    } else {
+      handleOpenAuth('HEALTH_WORKER', 'SIGN_IN');
+    }
   };
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
@@ -98,7 +140,7 @@ export default function App() {
       {/* Universal Top Navigation */}
       <Navbar
         currentRole={currentRole}
-        onSelectRole={setCurrentRole}
+        onSelectRole={handleSelectRole}
         language={language}
         onToggleLanguage={handleToggleLanguage}
         t={t}
@@ -108,17 +150,35 @@ export default function App() {
         onOpenSos={() => handleOpenSos()}
         onOpenNotifications={() => setIsNotifDrawerOpen(true)}
         unreadCount={unreadCount}
+        onOpenAuth={handleOpenAuth}
       />
+
+      {/* Role-Based Access Restriction Warning Banner */}
+      {accessDeniedMessage && (
+        <div className="bg-rose-600 text-white px-4 py-3 text-xs font-semibold flex items-center justify-between shadow-md">
+          <div className="flex items-center gap-2 max-w-5xl mx-auto">
+            <ShieldAlert className="w-4 h-4 shrink-0 text-white" />
+            <span>{accessDeniedMessage}</span>
+          </div>
+          <button
+            onClick={() => setAccessDeniedMessage(null)}
+            className="p-1 hover:bg-rose-700 rounded-md cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Main Role Content View */}
       <main className="flex-1">
         {currentRole === 'LANDING' && (
           <LandingPage
-            onSelectRole={setCurrentRole}
+            onSelectRole={handleSelectRole}
             onOpenSos={() => handleOpenSos()}
             onLaunchDemoScenario1={handleLaunchScenario1}
             onLaunchDemoScenario2={handleLaunchScenario2}
             t={t}
+            onOpenAuth={handleOpenAuth}
           />
         )}
 
@@ -156,13 +216,28 @@ export default function App() {
         )}
       </main>
 
+      {/* Role-Based Authentication & Registration Modal */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        initialRole={authModalRole}
+        initialMode={authModalMode}
+        onSuccessRedirect={(role) => {
+          setCurrentRole(role);
+        }}
+      />
+
       {/* Emergency SOS Modal */}
       <EmergencyModal
         isOpen={isSosOpen}
         onClose={() => setIsSosOpen(false)}
         onViewAmbulanceDashboard={() => {
           setIsSosOpen(false);
-          setCurrentRole('AMBULANCE_PARAMEDIC');
+          if (isAuthenticated && canAccessRole('AMBULANCE_PARAMEDIC')) {
+            setCurrentRole('AMBULANCE_PARAMEDIC');
+          } else {
+            handleOpenAuth('AMBULANCE_PARAMEDIC', 'SIGN_IN');
+          }
         }}
         defaultSymptoms={sosSymptoms}
         defaultDangerSigns={sosDangerSigns}
@@ -216,6 +291,8 @@ export default function App() {
               <span>Layered Clinical Safety Override</span>
             </span>
             <span>•</span>
+            <span>Role-Based Secure Multi-Portal</span>
+            <span>•</span>
             <span>English & Telugu (తెలుగు)</span>
             <span>•</span>
             <span className="font-bold text-teal-700">Hackathon PS4 Edition</span>
@@ -224,5 +301,13 @@ export default function App() {
       </footer>
 
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AikyaCareMain />
+    </AuthProvider>
   );
 }

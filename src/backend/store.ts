@@ -6,6 +6,7 @@
  * Ambulance, Hospital, and District Admin dashboards.
  */
 
+import bcrypt from 'bcryptjs';
 import {
   Patient,
   Doctor,
@@ -22,6 +23,29 @@ import {
   NotificationItem
 } from '../types';
 
+export interface StoredUser {
+  id: string;
+  email?: string;
+  phone: string;
+  name: string;
+  passwordHash: string;
+  role: string; // PATIENT, HEALTH_WORKER, DOCTOR, AMBULANCE_PARAMEDIC, HOSPITAL_STAFF, ADMIN
+  language: string;
+  patientId?: string;
+  doctorId?: string;
+  workerId?: string;
+  ambulanceId?: string;
+  hospitalId?: string;
+  specialization?: string;
+  qualification?: string;
+  villageName?: string;
+  district?: string;
+  vehicleNumber?: string;
+  hospitalName?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface TriageRecord {
   id: string;
   patientId?: string;
@@ -36,6 +60,7 @@ export interface TriageRecord {
 }
 
 class DatabaseStore {
+  public users: StoredUser[] = [];
   public patients: Patient[] = [];
   public doctors: Doctor[] = [];
   public hospitals: Hospital[] = [];
@@ -572,6 +597,190 @@ Serum Ferritin: 18 ng/mL (Low)`,
         isRead: true
       }
     ];
+
+    // 8. Pre-seeded Users with Bcrypt Hashes (Default password: Password@123)
+    const demoHash = bcrypt.hashSync('Password@123', 10);
+    this.users = [
+      {
+        id: 'usr-pat-1',
+        email: 'patient@aikyacare.demo',
+        phone: '+91 94401 56789',
+        name: 'Ravi Kumar',
+        passwordHash: demoHash,
+        role: 'PATIENT',
+        language: 'en',
+        patientId: 'pat-1',
+        villageName: 'Kothur Gramam',
+        district: 'Warangal Rural',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      },
+      {
+        id: 'usr-hw-1',
+        email: 'asha@aikyacare.demo',
+        phone: '+91 94402 11111',
+        workerId: 'HW-ASHA-01',
+        name: 'Padmavati (ASHA Worker)',
+        passwordHash: demoHash,
+        role: 'HEALTH_WORKER',
+        language: 'te',
+        villageName: 'Kothur Gramam',
+        district: 'Warangal Rural',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      },
+      {
+        id: 'usr-doc-1',
+        email: 'doctor@aikyacare.demo',
+        phone: '+91 98490 11223',
+        doctorId: 'doc-1',
+        name: 'Dr. Ananya Sharma',
+        passwordHash: demoHash,
+        role: 'DOCTOR',
+        language: 'en',
+        specialization: 'General Medicine / Primary Care',
+        qualification: 'MBBS, MD (Family Medicine)',
+        hospitalName: 'District Care Hospital',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      },
+      {
+        id: 'usr-amb-104',
+        email: 'ambulance@aikyacare.demo',
+        phone: '+91 98480 12345',
+        ambulanceId: 'amb-104',
+        vehicleNumber: 'AMB-104',
+        name: 'Ramesh Goud (AMB-104 Driver)',
+        passwordHash: demoHash,
+        role: 'AMBULANCE_PARAMEDIC',
+        language: 'en',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      },
+      {
+        id: 'usr-hosp-1',
+        email: 'hospital@aikyacare.demo',
+        phone: '+91 870 245 9901',
+        hospitalId: 'hosp-1',
+        name: 'District Care Hospital Desk',
+        passwordHash: demoHash,
+        role: 'HOSPITAL_STAFF',
+        hospitalName: 'District Care Hospital',
+        district: 'Warangal Urban',
+        language: 'en',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      },
+      {
+        id: 'usr-admin-1',
+        email: 'admin@aikyacare.demo',
+        phone: '+91 99999 00000',
+        name: 'Chief District Medical Officer',
+        passwordHash: demoHash,
+        role: 'ADMIN',
+        language: 'en',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+    ];
+  }
+
+  // User Authentication Helper Methods
+  public findUserById(id: string): StoredUser | undefined {
+    return this.users.find(u => u.id === id);
+  }
+
+  public findUserByIdentifier(identifier: string, role?: string): StoredUser | undefined {
+    if (!identifier) return undefined;
+    const cleanId = identifier.trim().toLowerCase();
+    const digitsOnly = identifier.replace(/\D/g, '');
+
+    return this.users.find(u => {
+      const emailMatch = u.email && u.email.toLowerCase() === cleanId;
+      const phoneClean = u.phone ? u.phone.replace(/\D/g, '') : '';
+      const phoneMatch = phoneClean && digitsOnly && (phoneClean.endsWith(digitsOnly) || digitsOnly.endsWith(phoneClean));
+      const workerMatch = u.workerId && u.workerId.toLowerCase() === cleanId;
+      const ambMatch = (u.ambulanceId && u.ambulanceId.toLowerCase() === cleanId) || (u.vehicleNumber && u.vehicleNumber.toLowerCase() === cleanId);
+      const hospMatch = u.hospitalId && u.hospitalId.toLowerCase() === cleanId;
+      const idMatch = u.id.toLowerCase() === cleanId;
+
+      const identifierMatches = emailMatch || phoneMatch || workerMatch || ambMatch || hospMatch || idMatch;
+      if (!identifierMatches) return false;
+
+      if (role) {
+        const uRole = u.role.toUpperCase();
+        const rRole = role.toUpperCase();
+        if (rRole === 'ASHA' && uRole === 'HEALTH_WORKER') return true;
+        if (rRole === 'AMBULANCE' && uRole === 'AMBULANCE_PARAMEDIC') return true;
+        if (rRole === 'HOSPITAL' && uRole === 'HOSPITAL_STAFF') return true;
+        if (uRole === rRole) return true;
+        return false;
+      }
+      return true;
+    });
+  }
+
+  public registerPatient(data: {
+    name: string;
+    phone: string;
+    email?: string;
+    passwordHash: string;
+    age: number;
+    gender: string;
+    villageId?: string;
+    villageName?: string;
+    village?: string;
+    district?: string;
+    bloodGroup?: string;
+    allergies?: string[];
+    chronicConditions?: string[];
+    knownConditions?: string[];
+    emergencyContact?: string;
+    address?: string;
+  }): { user: StoredUser; patient: Patient } {
+    const userId = `usr-pat-${Date.now()}`;
+    const patientId = `pat-${Date.now()}`;
+    const vName = data.villageName || data.village || 'Kothur Gramam';
+    const dist = data.district || 'Warangal Rural';
+    const conditions = data.chronicConditions || data.knownConditions || [];
+
+    const newPatient: Patient = {
+      id: patientId,
+      userId,
+      name: data.name,
+      phone: data.phone,
+      age: Number(data.age) || 30,
+      gender: data.gender || 'Other',
+      bloodGroup: data.bloodGroup || 'Unknown',
+      address: data.address || `${vName}, ${dist}`,
+      villageId: data.villageId || 'vil-1',
+      villageName: vName,
+      emergencyContact: data.emergencyContact || 'Family Member',
+      chronicConditions: conditions,
+      allergies: data.allergies || [],
+      currentMeds: [],
+      vitals: { heartRate: 74, spO2: 98, systolicBP: 120, diastolicBP: 80 }
+    };
+
+    const newUser: StoredUser = {
+      id: userId,
+      email: data.email ? data.email.toLowerCase().trim() : undefined,
+      phone: data.phone.trim(),
+      name: data.name.trim(),
+      passwordHash: data.passwordHash,
+      role: 'PATIENT',
+      language: 'en',
+      patientId,
+      villageName: vName,
+      district: dist,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    this.users.unshift(newUser);
+    this.patients.unshift(newPatient);
+
+    return { user: newUser, patient: newPatient };
   }
 
   // Helper Methods

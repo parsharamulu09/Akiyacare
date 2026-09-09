@@ -6,6 +6,14 @@ import { Router, Request, Response } from 'express';
 import { dbStore } from './store';
 import { processTriageWithAI, summarizeLabReportWithAI, askHealthAssistantAI } from './gemini';
 import { TriageInput } from '../types';
+import {
+  hashPassword,
+  comparePassword,
+  generateToken,
+  authenticateToken,
+  requireRole,
+  AuthenticatedRequest
+} from './auth';
 
 export const apiRouter = Router();
 
@@ -20,52 +28,286 @@ apiRouter.get('/health', (req: Request, res: Response) => {
 });
 
 // ==================== AUTHENTICATION ====================
-apiRouter.post('/auth/login', (req: Request, res: Response) => {
-  const { phone, role = 'PATIENT' } = req.body;
-  // Demo auto-login / token generation
-  const patient = dbStore.patients.find(p => p.phone === phone) || dbStore.patients[0];
-  res.json({
-    success: true,
-    token: `demo-jwt-${Date.now()}-${role.toLowerCase()}`,
-    user: {
-      id: patient.userId,
-      name: role === 'PATIENT' ? patient.name : role === 'DOCTOR' ? 'Dr. Ananya Sharma' : role === 'HEALTH_WORKER' ? 'Padmavati (ASHA)' : role === 'AMBULANCE_PARAMEDIC' ? 'Ramesh (AMB-104)' : role === 'HOSPITAL_STAFF' ? 'District Hospital Triage Desk' : 'Chief District Medical Officer',
-      role,
-      phone: phone || '+91 94401 56789',
-      patientId: patient.id
+
+// Public Registration - Only permitted for PATIENT role
+apiRouter.post('/auth/register', async (req: Request, res: Response) => {
+  try {
+    const {
+      name,
+      phone,
+      email,
+      password,
+      confirmPassword,
+      role = 'PATIENT',
+      age,
+      gender,
+      village,
+      district,
+      bloodGroup,
+      allergies,
+      chronicConditions,
+      address,
+      emergencyContact
+    } = req.body;
+
+    // 1. Role check: Only Patients can self-register publicly
+    const normRole = (role || 'PATIENT').toUpperCase();
+    if (normRole !== 'PATIENT') {
+      return res.status(403).json({
+        success: false,
+        error: 'Public registration is restricted to Patients. ASHA workers, Clinicians, Paramedics, and Hospital staff accounts are provisioned by District Health Administrators.'
+      });
     }
-  });
+
+    // 2. Field validations
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ success: false, error: 'Full Name is required.' });
+    }
+    if (!phone || typeof phone !== 'string' || phone.trim().length < 8) {
+      return res.status(400).json({ success: false, error: 'A valid Phone Number is required.' });
+    }
+    if (!password || typeof password !== 'string' || password.length < 6) {
+      return res.status(400).json({ success: false, error: 'Password must be at least 6 characters long.' });
+    }
+    if (confirmPassword && password !== confirmPassword) {
+      return res.status(400).json({ success: false, error: 'Passwords do not match.' });
+    }
+    if (!age || isNaN(Number(age)) || Number(age) <= 0 || Number(age) > 130) {
+      return res.status(400).json({ success: false, error: 'A valid age is required.' });
+    }
+    if (!gender || typeof gender !== 'string') {
+      return res.status(400).json({ success: false, error: 'Gender is required.' });
+    }
+    if (!village || typeof village !== 'string' || !village.trim()) {
+      return res.status(400).json({ success: false, error: 'Village name is required.' });
+    }
+    if (!district || typeof district !== 'string' || !district.trim()) {
+      return res.status(400).json({ success: false, error: 'District name is required.' });
+    }
+
+    // 3. Duplicate checks
+    const existingPhone = dbStore.users.find(u => u.phone.replace(/\D/g, '') === phone.replace(/\D/g, ''));
+    if (existingPhone) {
+      return res.status(409).json({ success: false, error: 'An account with this phone number already exists.' });
+    }
+    if (email && typeof email === 'string' && email.trim()) {
+      const existingEmail = dbStore.users.find(u => u.email && u.email.toLowerCase() === email.toLowerCase().trim());
+      if (existingEmail) {
+        return res.status(409).json({ success: false, error: 'An account with this email address already exists.' });
+      }
+    }
+
+    // 4. Secure password hashing
+    const passwordHash = await hashPassword(password);
+
+    // 5. Parse arrays if strings provided
+    const parsedAllergies = Array.isArray(allergies)
+      ? allergies
+      : typeof allergies === 'string' && allergies.trim()
+      ? allergies.split(',').map(s => s.trim()).filter(Boolean)
+      : [];
+
+    const parsedConditions = Array.isArray(chronicConditions)
+      ? chronicConditions
+      : typeof chronicConditions === 'string' && chronicConditions.trim()
+      ? chronicConditions.split(',').map(s => s.trim()).filter(Boolean)
+      : [];
+
+    // 6. Save in store
+    const { user, patient } = dbStore.registerPatient({
+      name: name.trim(),
+      phone: phone.trim(),
+      email: email && email.trim() ? email.toLowerCase().trim() : undefined,
+      passwordHash,
+      age: Number(age),
+      gender: gender.trim(),
+      villageName: village.trim(),
+      district: district.trim(),
+      bloodGroup: bloodGroup ? bloodGroup.trim() : 'Unknown',
+      allergies: parsedAllergies,
+      chronicConditions: parsedConditions,
+      address: address ? address.trim() : undefined,
+      emergencyContact: emergencyContact ? emergencyContact.trim() : undefined
+    });
+
+    // 7. Generate JWT token
+    const token = generateToken({
+      userId: user.id,
+      role: user.role,
+      name: user.name,
+      phone: user.phone,
+      email: user.email,
+      patientId: patient.id
+    });
+
+    const safeUser = {
+      id: user.id,
+      name: user.name,
+      phone: user.phone,
+      email: user.email,
+      role: user.role,
+      patientId: patient.id,
+      villageName: user.villageName,
+      district: user.district
+    };
+
+    return res.status(201).json({
+      success: true,
+      message: 'Registration successful. Welcome to AikyaCare!',
+      token,
+      user: safeUser,
+      patient
+    });
+  } catch (error: any) {
+    console.error('Registration error:', error);
+    return res.status(500).json({ success: false, error: 'Registration failed due to a server error.' });
+  }
 });
 
-apiRouter.post('/auth/register', (req: Request, res: Response) => {
-  const { name, phone, age, gender, villageId } = req.body;
-  const newPatient = {
-    id: `pat-${Date.now()}`,
-    userId: `usr-${Date.now()}`,
-    name: name || 'New Patient',
-    phone: phone || '+91 90000 00000',
-    age: Number(age) || 30,
-    gender: gender || 'Other',
-    bloodGroup: 'Unknown',
-    address: 'Rural Cluster',
-    villageId: villageId || 'vil-1',
-    villageName: 'Kothur Gramam',
-    emergencyContact: 'Nearest Village Relative',
-    chronicConditions: [],
-    allergies: [],
-    currentMeds: [],
-    vitals: { heartRate: 75, spO2: 98, systolicBP: 120, diastolicBP: 80 }
-  };
-  dbStore.patients.push(newPatient);
+// Dedicated Sign In for all 6 Roles
+apiRouter.post('/auth/login', async (req: Request, res: Response) => {
+  try {
+    const { identifier, phone, email, password, role } = req.body;
+    const loginId = identifier || phone || email;
 
-  res.json({
+    if (!loginId || typeof loginId !== 'string' || !loginId.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please enter your registered Email, Phone, or ID.'
+      });
+    }
+
+    if (!password || typeof password !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: 'Password is required.'
+      });
+    }
+
+    // Lookup user in store
+    const user = dbStore.findUserByIdentifier(loginId.trim(), role);
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        error: 'Account not found for the provided ID/credentials and selected role.'
+      });
+    }
+
+    // Role verification if role passed
+    if (role) {
+      const normalizedReqRole = role.toUpperCase();
+      const userRole = user.role.toUpperCase();
+      const isAsha = (normalizedReqRole === 'ASHA' && userRole === 'HEALTH_WORKER');
+      const isAmb = (normalizedReqRole === 'AMBULANCE' && userRole === 'AMBULANCE_PARAMEDIC');
+      const isHosp = (normalizedReqRole === 'HOSPITAL' && userRole === 'HOSPITAL_STAFF');
+      const matches = isAsha || isAmb || isHosp || (userRole === normalizedReqRole);
+
+      if (!matches) {
+        return res.status(403).json({
+          success: false,
+          error: `Role mismatch: This account is registered as '${user.role}', but you selected '${role}'.`
+        });
+      }
+    }
+
+    // Verify password with bcrypt
+    const isPasswordValid = await comparePassword(password, user.passwordHash);
+    if (!isPasswordValid) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid password. Please check your credentials.'
+      });
+    }
+
+    // Generate JWT token
+    const token = generateToken({
+      userId: user.id,
+      role: user.role,
+      name: user.name,
+      phone: user.phone,
+      email: user.email,
+      patientId: user.patientId,
+      doctorId: user.doctorId,
+      workerId: user.workerId,
+      ambulanceId: user.ambulanceId,
+      hospitalId: user.hospitalId
+    });
+
+    const safeUser = {
+      id: user.id,
+      name: user.name,
+      phone: user.phone,
+      email: user.email,
+      role: user.role,
+      patientId: user.patientId,
+      doctorId: user.doctorId,
+      workerId: user.workerId,
+      ambulanceId: user.ambulanceId,
+      hospitalId: user.hospitalId,
+      specialization: user.specialization,
+      villageName: user.villageName,
+      district: user.district,
+      vehicleNumber: user.vehicleNumber,
+      hospitalName: user.hospitalName
+    };
+
+    return res.json({
+      success: true,
+      message: `Welcome back, ${user.name}!`,
+      token,
+      user: safeUser
+    });
+  } catch (error: any) {
+    console.error('Login error:', error);
+    return res.status(500).json({ success: false, error: 'Login failed due to a server error.' });
+  }
+});
+
+// Current User Verification endpoint
+apiRouter.get('/auth/me', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
+  if (!req.user) {
+    return res.status(401).json({ success: false, error: 'Unauthorized' });
+  }
+  const user = dbStore.findUserById(req.user.userId);
+  if (!user) {
+    return res.status(404).json({ success: false, error: 'User account not found' });
+  }
+  const safeUser = {
+    id: user.id,
+    name: user.name,
+    phone: user.phone,
+    email: user.email,
+    role: user.role,
+    patientId: user.patientId,
+    doctorId: user.doctorId,
+    workerId: user.workerId,
+    ambulanceId: user.ambulanceId,
+    hospitalId: user.hospitalId,
+    specialization: user.specialization,
+    villageName: user.villageName,
+    district: user.district,
+    vehicleNumber: user.vehicleNumber,
+    hospitalName: user.hospitalName
+  };
+  return res.json({ success: true, user: safeUser });
+});
+
+// Forgot Password / Recovery Guidance
+apiRouter.post('/auth/forgot-password', (req: Request, res: Response) => {
+  const { identifier, role } = req.body;
+  return res.json({
     success: true,
-    patient: newPatient,
-    token: `demo-jwt-${Date.now()}`
+    message: `Password reset request registered for ${identifier || 'account'}. For security in rural healthcare networks, contact your PHC Supervisor or Chief Medical Officer Desk for verification.`
   });
 });
 
 // ==================== PATIENTS ====================
+apiRouter.get('/patients/me', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
+  const patientId = req.user?.patientId;
+  const patient = dbStore.patients.find(p => p.id === patientId || p.userId === req.user?.userId) || dbStore.patients[0];
+  res.json({ success: true, patient, user: req.user });
+});
+
 apiRouter.get('/patients', (req: Request, res: Response) => {
   res.json({ success: true, patients: dbStore.patients });
 });
@@ -218,7 +460,7 @@ apiRouter.get('/ambulance/requests', (req: Request, res: Response) => {
   });
 });
 
-apiRouter.put('/ambulance/:id/status', (req: Request, res: Response) => {
+apiRouter.put('/ambulance/:id/status', authenticateToken, requireRole('AMBULANCE_PARAMEDIC', 'HOSPITAL_STAFF', 'ADMIN'), (req: AuthenticatedRequest, res: Response) => {
   const { status, notes } = req.body;
   const updated = dbStore.updateEmergencyStatus(req.params.id, status, notes);
   if (!updated) return res.status(404).json({ error: 'Emergency not found' });
@@ -279,9 +521,10 @@ apiRouter.get('/prescriptions/:patientId', (req: Request, res: Response) => {
   res.json({ success: true, prescriptions: list });
 });
 
-apiRouter.post('/prescriptions', (req: Request, res: Response) => {
+apiRouter.post('/prescriptions', authenticateToken, requireRole('DOCTOR', 'ADMIN'), (req: AuthenticatedRequest, res: Response) => {
   const { patientId, doctorId, medications, instructions, diagnosis, followUpDate } = req.body;
-  const doctor = dbStore.doctors.find(d => d.id === doctorId) || dbStore.doctors[0];
+  const effectiveDocId = req.user?.doctorId || doctorId || 'doc-1';
+  const doctor = dbStore.doctors.find(d => d.id === effectiveDocId) || dbStore.doctors[0];
 
   const newRx = {
     id: `rx-${Date.now()}`,
@@ -329,7 +572,7 @@ apiRouter.post('/health-worker/triage', async (req: Request, res: Response) => {
   res.json({ success: true, record });
 });
 
-apiRouter.post('/health-worker/sync', (req: Request, res: Response) => {
+apiRouter.post('/health-worker/sync', authenticateToken, requireRole('HEALTH_WORKER', 'ADMIN'), (req: AuthenticatedRequest, res: Response) => {
   const { items } = req.body; // Array of queued sync items
   if (!Array.isArray(items)) {
     return res.status(400).json({ error: 'Expected items array' });
@@ -434,7 +677,13 @@ apiRouter.get('/hospitals/:id/beds', (req: Request, res: Response) => {
   });
 });
 
-apiRouter.put('/hospitals/:id/beds', (req: Request, res: Response) => {
+apiRouter.put('/hospitals/:id/beds', authenticateToken, requireRole('HOSPITAL_STAFF', 'ADMIN'), (req: AuthenticatedRequest, res: Response) => {
+  const updated = dbStore.updateHospitalBeds(req.params.id, req.body);
+  if (!updated) return res.status(404).json({ error: 'Hospital not found' });
+  res.json({ success: true, hospital: updated });
+});
+
+apiRouter.patch('/hospitals/:id/beds', authenticateToken, requireRole('HOSPITAL_STAFF', 'ADMIN'), (req: AuthenticatedRequest, res: Response) => {
   const updated = dbStore.updateHospitalBeds(req.params.id, req.body);
   if (!updated) return res.status(404).json({ error: 'Hospital not found' });
   res.json({ success: true, hospital: updated });
@@ -454,7 +703,7 @@ apiRouter.put('/referrals/:id/status', (req: Request, res: Response) => {
 });
 
 // ==================== ADMIN & DISTRICT ANALYTICS ====================
-apiRouter.get('/admin/analytics', (req: Request, res: Response) => {
+apiRouter.get('/admin/analytics', authenticateToken, requireRole('ADMIN'), (req: AuthenticatedRequest, res: Response) => {
   const totalPatients = dbStore.patients.length + 1420; // Include surveyed village populace
   const activeEmergencies = dbStore.emergencyRequests.filter(e => e.status !== 'ARRIVED_AT_HOSPITAL').length;
   const pendingReferrals = dbStore.referrals.filter(r => r.status === 'PENDING').length;
@@ -491,11 +740,11 @@ apiRouter.get('/admin/analytics', (req: Request, res: Response) => {
   });
 });
 
-apiRouter.get('/admin/villages', (req: Request, res: Response) => {
+apiRouter.get('/admin/villages', authenticateToken, requireRole('ADMIN'), (req: AuthenticatedRequest, res: Response) => {
   res.json({ success: true, villages: dbStore.villageHealthIndices });
 });
 
-apiRouter.get('/admin/emergencies', (req: Request, res: Response) => {
+apiRouter.get('/admin/emergencies', authenticateToken, requireRole('ADMIN'), (req: AuthenticatedRequest, res: Response) => {
   res.json({
     success: true,
     emergencies: dbStore.emergencyRequests,

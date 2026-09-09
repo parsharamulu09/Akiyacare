@@ -1,5 +1,10 @@
 /**
  * Typed Frontend API Client for AikyaCare
+ * 
+ * Includes:
+ * - Persistent JWT authorization header management
+ * - Public & authenticated API routes
+ * - Backward compatibility with all existing mock/live endpoints
  */
 
 import {
@@ -18,195 +23,221 @@ import {
   Patient
 } from '../types';
 
+let authToken = typeof window !== 'undefined' ? (localStorage.getItem('aikyacare_token') || '') : '';
+
+export const setAuthToken = (token: string | null) => {
+  authToken = token || '';
+  if (typeof window !== 'undefined') {
+    if (token) {
+      localStorage.setItem('aikyacare_token', token);
+    } else {
+      localStorage.removeItem('aikyacare_token');
+    }
+  }
+};
+
+export const getAuthToken = (): string => authToken;
+
+async function apiFetch<T = any>(url: string, options: RequestInit = {}): Promise<T> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string> || {})
+  };
+
+  if (authToken) {
+    headers['Authorization'] = `Bearer ${authToken}`;
+  }
+
+  const res = await fetch(url, {
+    ...options,
+    headers
+  });
+
+  const data = await res.json().catch(() => ({ success: false, error: 'Failed to parse JSON response' }));
+  if (!res.ok && !data.error) {
+    data.error = `HTTP Error ${res.status}: ${res.statusText}`;
+  }
+  return data as T;
+}
+
 export const apiClient = {
-  // Authentication
-  login: async (phone: string, role: string) => {
-    const res = await fetch('/api/auth/login', {
+  // ==================== AUTHENTICATION ====================
+  login: async (credentials: { identifier?: string; phone?: string; email?: string; password?: string; role?: string }) => {
+    return apiFetch<{ success: boolean; token?: string; user?: any; error?: string; message?: string }>('/api/auth/login', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone, role })
+      body: JSON.stringify(credentials)
     });
-    return res.json();
   },
 
-  // Patients
-  getPatients: async (): Promise<{ success: boolean; patients: Patient[] }> => {
-    const res = await fetch('/api/patients');
-    return res.json();
-  },
-
-  getPatient: async (id: string): Promise<{ success: boolean; patient: Patient }> => {
-    const res = await fetch(`/api/patients/${id}`);
-    return res.json();
-  },
-
-  // Triage
-  runTriage: async (input: TriageInput): Promise<{ success: boolean; result: TriageResult }> => {
-    const res = await fetch('/api/triage', {
+  registerPatient: async (data: any) => {
+    return apiFetch<{ success: boolean; token?: string; user?: any; patient?: Patient; error?: string; message?: string }>('/api/auth/register', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+  },
+
+  getMe: async () => {
+    return apiFetch<{ success: boolean; user?: any; error?: string }>('/api/auth/me');
+  },
+
+  forgotPassword: async (identifier: string, role?: string) => {
+    return apiFetch<{ success: boolean; message: string; error?: string }>('/api/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ identifier, role })
+    });
+  },
+
+  // ==================== PATIENTS ====================
+  getPatients: async (): Promise<{ success: boolean; patients: Patient[]; error?: string }> => {
+    return apiFetch('/api/patients');
+  },
+
+  getPatient: async (id: string): Promise<{ success: boolean; patient: Patient; error?: string }> => {
+    return apiFetch(`/api/patients/${id}`);
+  },
+
+  getPatientMe: async (): Promise<{ success: boolean; patient: Patient; user?: any; error?: string }> => {
+    return apiFetch('/api/patients/me');
+  },
+
+  // ==================== TRIAGE & AI ====================
+  runTriage: async (input: TriageInput): Promise<{ success: boolean; result: TriageResult; error?: string }> => {
+    return apiFetch('/api/triage', {
+      method: 'POST',
       body: JSON.stringify(input)
     });
-    return res.json();
   },
 
-  // AI Services
-  summarizeReport: async (data: { rawText: string; recordType?: string; patientId?: string; title?: string }): Promise<{ success: boolean; record: MedicalRecord }> => {
-    const res = await fetch('/api/ai/report-summary', {
+  summarizeReport: async (data: { rawText: string; recordType?: string; patientId?: string; title?: string }): Promise<{ success: boolean; record: MedicalRecord; error?: string }> => {
+    return apiFetch('/api/ai/report-summary', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
-    return res.json();
   },
 
-  askAssistant: async (message: string, context?: string): Promise<{ success: boolean; reply: string; suggestedQuestions: string[] }> => {
-    const res = await fetch('/api/ai/health-assistant', {
+  askAssistant: async (message: string, context?: string): Promise<{ success: boolean; reply: string; suggestedQuestions: string[]; error?: string }> => {
+    return apiFetch('/api/ai/health-assistant', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message, context })
     });
-    return res.json();
   },
 
-  // Emergency SOS
-  triggerEmergencySos: async (data: Partial<EmergencyRequest>): Promise<{ success: boolean; emergency: EmergencyRequest }> => {
-    const res = await fetch('/api/emergency/sos', {
+  // ==================== EMERGENCY SOS & AMBULANCE ====================
+  triggerEmergencySos: async (data: Partial<EmergencyRequest>): Promise<{ success: boolean; emergency: EmergencyRequest; error?: string }> => {
+    return apiFetch('/api/emergency/sos', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
-    return res.json();
   },
 
-  getEmergencies: async (): Promise<{ success: boolean; emergencies: EmergencyRequest[] }> => {
-    const res = await fetch('/api/emergency/requests');
-    return res.json();
+  getEmergencies: async (): Promise<{ success: boolean; emergencies: EmergencyRequest[]; error?: string }> => {
+    return apiFetch('/api/emergency/requests');
   },
 
-  updateEmergencyStatus: async (id: string, status: string, notes?: string): Promise<{ success: boolean; emergency: EmergencyRequest }> => {
-    const res = await fetch(`/api/emergency/${id}/status`, {
+  updateEmergencyStatus: async (id: string, status: string, notes?: string): Promise<{ success: boolean; emergency: EmergencyRequest; error?: string }> => {
+    return apiFetch(`/api/emergency/${id}/status`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status, notes })
     });
-    return res.json();
   },
 
-  // Ambulance
-  getAmbulances: async (): Promise<{ success: boolean; emergencies: EmergencyRequest[]; ambulances: Ambulance[] }> => {
-    const res = await fetch('/api/ambulance/requests');
-    return res.json();
+  getAmbulances: async (): Promise<{ success: boolean; emergencies: EmergencyRequest[]; ambulances: Ambulance[]; error?: string }> => {
+    return apiFetch('/api/ambulance/requests');
   },
 
-  // Appointments
-  getAppointments: async (params?: { patientId?: string; doctorId?: string }): Promise<{ success: boolean; appointments: Appointment[]; doctors: any[] }> => {
-    const query = new URLSearchParams(params as any).toString();
-    const res = await fetch(`/api/appointments?${query}`);
-    return res.json();
-  },
-
-  bookAppointment: async (data: Partial<Appointment>): Promise<{ success: boolean; appointment: Appointment }> => {
-    const res = await fetch('/api/appointments', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    });
-    return res.json();
-  },
-
-  updateAppointment: async (id: string, data: Partial<Appointment>): Promise<{ success: boolean; appointment: Appointment }> => {
-    const res = await fetch(`/api/appointments/${id}`, {
+  updateAmbulanceStatus: async (id: string, status: string, notes?: string): Promise<{ success: boolean; emergency: EmergencyRequest; error?: string }> => {
+    return apiFetch(`/api/ambulance/${id}/status`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status, notes })
+    });
+  },
+
+  // ==================== APPOINTMENTS & TELEMEDICINE ====================
+  getAppointments: async (params?: { patientId?: string; doctorId?: string }): Promise<{ success: boolean; appointments: Appointment[]; doctors: any[]; error?: string }> => {
+    const query = new URLSearchParams(params as any).toString();
+    return apiFetch(`/api/appointments?${query}`);
+  },
+
+  bookAppointment: async (data: Partial<Appointment>): Promise<{ success: boolean; appointment: Appointment; error?: string }> => {
+    return apiFetch('/api/appointments', {
+      method: 'POST',
       body: JSON.stringify(data)
     });
-    return res.json();
   },
 
-  // Prescriptions
-  getPrescriptions: async (patientId: string): Promise<{ success: boolean; prescriptions: Prescription[] }> => {
-    const res = await fetch(`/api/prescriptions/${patientId}`);
-    return res.json();
-  },
-
-  createPrescription: async (data: any): Promise<{ success: boolean; prescription: Prescription }> => {
-    const res = await fetch('/api/prescriptions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+  updateAppointment: async (id: string, data: Partial<Appointment>): Promise<{ success: boolean; appointment: Appointment; error?: string }> => {
+    return apiFetch(`/api/appointments/${id}`, {
+      method: 'PUT',
       body: JSON.stringify(data)
     });
-    return res.json();
   },
 
-  // Health Worker & Sync
-  syncOfflineQueue: async (items: any[]): Promise<{ success: boolean; syncedCount: number; message: string }> => {
-    const res = await fetch('/api/health-worker/sync', {
+  // ==================== PRESCRIPTIONS ====================
+  getPrescriptions: async (patientId: string): Promise<{ success: boolean; prescriptions: Prescription[]; error?: string }> => {
+    return apiFetch(`/api/prescriptions/${patientId}`);
+  },
+
+  createPrescription: async (data: any): Promise<{ success: boolean; prescription: Prescription; error?: string }> => {
+    return apiFetch('/api/prescriptions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+  },
+
+  // ==================== HEALTH WORKER & OFFLINE SYNC ====================
+  syncOfflineQueue: async (items: any[]): Promise<{ success: boolean; syncedCount: number; message: string; error?: string }> => {
+    return apiFetch('/api/health-worker/sync', {
+      method: 'POST',
       body: JSON.stringify({ items })
     });
-    return res.json();
   },
 
-  getHealthWorkerTriage: async () => {
-    const res = await fetch('/api/health-worker/triage');
-    return res.json();
+  getHealthWorkerTriage: async (): Promise<{ success: boolean; triageRecords: any[]; villages: VillageHealthIndex[]; error?: string }> => {
+    return apiFetch('/api/health-worker/triage');
   },
 
-  getHouseholdSurveys: async (): Promise<{ success: boolean; surveys: HouseholdSurvey[] }> => {
-    const res = await fetch('/api/health-worker/surveys');
-    return res.json();
+  getHouseholdSurveys: async (): Promise<{ success: boolean; surveys: HouseholdSurvey[]; error?: string }> => {
+    return apiFetch('/api/health-worker/surveys');
   },
 
-  createHouseholdSurvey: async (data: Partial<HouseholdSurvey>): Promise<{ success: boolean; survey: HouseholdSurvey }> => {
-    const res = await fetch('/api/health-worker/surveys', {
+  createHouseholdSurvey: async (data: Partial<HouseholdSurvey>): Promise<{ success: boolean; survey: HouseholdSurvey; error?: string }> => {
+    return apiFetch('/api/health-worker/surveys', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
-    return res.json();
   },
 
-  // Hospitals
-  getHospitals: async (): Promise<{ success: boolean; hospitals: Hospital[] }> => {
-    const res = await fetch('/api/hospitals');
-    return res.json();
+  // ==================== HOSPITALS & BEDS ====================
+  getHospitals: async (): Promise<{ success: boolean; hospitals: Hospital[]; error?: string }> => {
+    return apiFetch('/api/hospitals');
   },
 
-  updateHospitalBeds: async (id: string, beds: Partial<Hospital>): Promise<{ success: boolean; hospital: Hospital }> => {
-    const res = await fetch(`/api/hospitals/${id}/beds`, {
+  updateHospitalBeds: async (id: string, beds: Partial<Hospital>): Promise<{ success: boolean; hospital: Hospital; error?: string }> => {
+    return apiFetch(`/api/hospitals/${id}/beds`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(beds)
     });
-    return res.json();
   },
 
-  // Referrals
-  getReferrals: async (): Promise<{ success: boolean; referrals: Referral[] }> => {
-    const res = await fetch('/api/referrals');
-    return res.json();
+  // ==================== REFERRALS ====================
+  getReferrals: async (): Promise<{ success: boolean; referrals: Referral[]; error?: string }> => {
+    return apiFetch('/api/referrals');
   },
 
-  updateReferralStatus: async (id: string, status: string, notes?: string): Promise<{ success: boolean; referral: Referral }> => {
-    const res = await fetch(`/api/referrals/${id}/status`, {
+  updateReferralStatus: async (id: string, status: string, notes?: string): Promise<{ success: boolean; referral: Referral; error?: string }> => {
+    return apiFetch(`/api/referrals/${id}/status`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status, supervisorNotes: notes })
     });
-    return res.json();
   },
 
-  // Admin Analytics
-  getAdminAnalytics: async () => {
-    const res = await fetch('/api/admin/analytics');
-    return res.json();
+  // ==================== ADMIN ANALYTICS ====================
+  getAdminAnalytics: async (): Promise<{ success: boolean; summary: any; villages: VillageHealthIndex[]; diseaseDistribution: any[]; referralTrends: any[]; error?: string }> => {
+    return apiFetch('/api/admin/analytics');
   },
 
-  // Notifications
-  getNotifications: async (): Promise<{ success: boolean; notifications: NotificationItem[] }> => {
-    const res = await fetch('/api/notifications');
-    return res.json();
+  // ==================== NOTIFICATIONS ====================
+  getNotifications: async (): Promise<{ success: boolean; notifications: NotificationItem[]; error?: string }> => {
+    return apiFetch('/api/notifications');
   }
 };

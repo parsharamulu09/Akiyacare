@@ -12,7 +12,9 @@ import {
   Sparkles,
   ChevronRight,
   ArrowRight,
-  Play
+  Play,
+  LogIn,
+  UserPlus
 } from 'lucide-react';
 import { UserRole } from '../../types';
 import { TranslationDict } from '../../utils/teluguTranslations';
@@ -23,6 +25,7 @@ interface LandingPageProps {
   onLaunchDemoScenario1: () => void;
   onLaunchDemoScenario2: () => void;
   t: TranslationDict;
+  onOpenAuth?: (role?: UserRole, mode?: 'SIGN_IN' | 'SIGN_UP') => void;
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({
@@ -30,7 +33,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   onOpenSos,
   onLaunchDemoScenario1,
   onLaunchDemoScenario2,
-  t
+  t,
+  onOpenAuth
 }) => {
   return (
     <div className="space-y-16 pb-16">
@@ -53,12 +57,20 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           {/* Call to Actions */}
           <div className="flex flex-wrap items-center justify-center gap-3 pt-4">
             <button
-              onClick={() => onSelectRole('PATIENT')}
+              onClick={() => onOpenAuth ? onOpenAuth('PATIENT', 'SIGN_IN') : onSelectRole('PATIENT')}
               className="px-6 py-3.5 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-extrabold text-sm sm:text-base shadow-lg shadow-teal-500/20 flex items-center gap-2 transition-all cursor-pointer hover:scale-102"
             >
-              <Stethoscope className="w-5 h-5 text-slate-950" />
-              <span>{t.checkSymptoms}</span>
+              <LogIn className="w-5 h-5 text-slate-950" />
+              <span>Sign In / Select Role</span>
               <ChevronRight className="w-4 h-4" />
+            </button>
+
+            <button
+              onClick={() => onOpenAuth ? onOpenAuth('PATIENT', 'SIGN_UP') : onSelectRole('PATIENT')}
+              className="px-6 py-3.5 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/20 font-bold text-sm sm:text-base flex items-center gap-2 transition-all cursor-pointer"
+            >
+              <UserPlus className="w-5 h-5 text-teal-300" />
+              <span>Create Account</span>
             </button>
 
             <button
@@ -67,14 +79,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             >
               <AlertTriangle className="w-5 h-5" />
               <span>{t.emergencySos}</span>
-            </button>
-
-            <button
-              onClick={() => onSelectRole('HEALTH_WORKER')}
-              className="px-6 py-3.5 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/20 font-bold text-sm sm:text-base flex items-center gap-2 transition-all cursor-pointer"
-            >
-              <Users className="w-5 h-5 text-teal-300" />
-              <span>ASHA Worker Portal</span>
             </button>
           </div>
 
@@ -295,7 +299,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <div
-            onClick={() => onSelectRole('PATIENT')}
+            onClick={() => onOpenAuth ? onOpenAuth('PATIENT', 'SIGN_IN') : onSelectRole('PATIENT')}
             className="p-5 bg-white rounded-2xl border border-slate-200 hover:border-teal-400 hover:shadow-md transition-all cursor-pointer group"
           >
             <div className="w-10 h-10 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center mb-3 group-hover:bg-teal-600 group-hover:text-white transition-colors">
@@ -308,13 +312,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               Check symptoms via voice/text, review vital metrics, book telemedicine doctor consultations, and summarize lab reports with AI.
             </p>
             <div className="mt-4 text-xs font-bold text-teal-700 flex items-center gap-1">
-              <span>Open Patient View</span>
+              <span>Enter Patient Portal</span>
               <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
             </div>
           </div>
 
           <div
-            onClick={() => onSelectRole('HEALTH_WORKER')}
+            onClick={() => onOpenAuth ? onOpenAuth('HEALTH_WORKER', 'SIGN_IN') : onSelectRole('HEALTH_WORKER')}
             className="p-5 bg-white rounded-2xl border border-slate-200 hover:border-teal-400 hover:shadow-md transition-all cursor-pointer group"
           >
             <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center mb-3 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
@@ -327,13 +331,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               Offline triage engine with Telugu voice input, pending sync queue, household survey register, maternal tracking, and supervisor referrals.
             </p>
             <div className="mt-4 text-xs font-bold text-emerald-700 flex items-center gap-1">
-              <span>Open ASHA Portal</span>
+              <span>Enter ASHA Portal</span>
               <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
             </div>
           </div>
 
           <div
-            onClick={() => onSelectRole('DOCTOR')}
+            onClick={() => onOpenAuth ? onOpenAuth('DOCTOR', 'SIGN_IN') : onSelectRole('DOCTOR')}
             className="p-5 bg-white rounded-2xl border border-slate-200 hover:border-teal-400 hover:shadow-md transition-all cursor-pointer group"
           >
             <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center mb-3 group-hover:bg-blue-600 group-hover:text-white transition-colors">
@@ -346,13 +350,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               Review AI triage risk scores, examine patient history, conduct video consultations, issue digital prescriptions, and order tests.
             </p>
             <div className="mt-4 text-xs font-bold text-blue-700 flex items-center gap-1">
-              <span>Open Doctor Desk</span>
+              <span>Enter Doctor Desk</span>
               <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
             </div>
           </div>
 
           <div
-            onClick={() => onSelectRole('AMBULANCE_PARAMEDIC')}
+            onClick={() => onOpenAuth ? onOpenAuth('AMBULANCE_PARAMEDIC', 'SIGN_IN') : onSelectRole('AMBULANCE_PARAMEDIC')}
             className="p-5 bg-white rounded-2xl border border-slate-200 hover:border-teal-400 hover:shadow-md transition-all cursor-pointer group"
           >
             <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center mb-3 group-hover:bg-rose-600 group-hover:text-white transition-colors">
@@ -365,13 +369,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               Live GPS route simulation, turn-by-turn navigation, patient vitals feed, and instant status updates (En Route, Arriving, Hospital Pickup).
             </p>
             <div className="mt-4 text-xs font-bold text-rose-700 flex items-center gap-1">
-              <span>Open Ambulance View</span>
+              <span>Enter Ambulance View</span>
               <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
             </div>
           </div>
 
           <div
-            onClick={() => onSelectRole('HOSPITAL_STAFF')}
+            onClick={() => onOpenAuth ? onOpenAuth('HOSPITAL_STAFF', 'SIGN_IN') : onSelectRole('HOSPITAL_STAFF')}
             className="p-5 bg-white rounded-2xl border border-slate-200 hover:border-teal-400 hover:shadow-md transition-all cursor-pointer group"
           >
             <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center mb-3 group-hover:bg-purple-600 group-hover:text-white transition-colors">
@@ -384,13 +388,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               Real-time ICU, Oxygen, and General bed availability counters, incoming ambulance ETA tracking, and emergency trauma bay alerts.
             </p>
             <div className="mt-4 text-xs font-bold text-purple-700 flex items-center gap-1">
-              <span>Open Hospital Triage</span>
+              <span>Enter Hospital Triage</span>
               <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
             </div>
           </div>
 
           <div
-            onClick={() => onSelectRole('ADMIN')}
+            onClick={() => onOpenAuth ? onOpenAuth('ADMIN', 'SIGN_IN') : onSelectRole('ADMIN')}
             className="p-5 bg-white rounded-2xl border border-slate-200 hover:border-teal-400 hover:shadow-md transition-all cursor-pointer group"
           >
             <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center mb-3 group-hover:bg-amber-600 group-hover:text-white transition-colors">
@@ -403,7 +407,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               Calculated Village Health Index (VHI), disease distribution heatmaps, maternal vaccination coverage, and referral turnaround analytics.
             </p>
             <div className="mt-4 text-xs font-bold text-amber-700 flex items-center gap-1">
-              <span>Open District Command</span>
+              <span>Enter District Command</span>
               <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
             </div>
           </div>

@@ -72,6 +72,7 @@ model User {
   email        String?       @unique
   phone        String        @unique
   name         String
+  passwordHash String        @default("")
   role         Role          @default(PATIENT)
   language     String        @default("en") // "en" | "te"
   avatarUrl    String?
@@ -115,6 +116,7 @@ model Patient {
   gender           String
   bloodGroup       String?
   address          String?
+  district         String?
   emergencyContact String?
   chronicConditions String[]         @default([])
   allergies        String[]          @default([])
