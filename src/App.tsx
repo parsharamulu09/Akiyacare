@@ -5,7 +5,6 @@ import { EmergencyModal } from './components/common/EmergencyModal';
 import { NotificationDrawer } from './components/common/NotificationDrawer';
 import { LandingPage } from './components/landing/LandingPage';
 import { PatientDashboard } from './components/patient/PatientDashboard';
-import { TriageModal } from './components/patient/TriageModal';
 import { ReportSummarizerModal } from './components/patient/ReportSummarizerModal';
 import { AshaPortal } from './components/healthworker/AshaPortal';
 import { DoctorDashboard } from './components/doctor/DoctorDashboard';
@@ -28,7 +27,6 @@ function AikyaCareMain() {
   
   // Modals state
   const [isSosOpen, setIsSosOpen] = useState(false);
-  const [isTriageOpen, setIsTriageOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isNotifDrawerOpen, setIsNotifDrawerOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -184,7 +182,6 @@ function AikyaCareMain() {
 
         {currentRole === 'PATIENT' && (
           <PatientDashboard
-            onOpenTriage={() => setIsTriageOpen(true)}
             onOpenSos={() => handleOpenSos()}
             onOpenReportSummarizer={() => setIsReportModalOpen(true)}
             t={t}
@@ -241,18 +238,6 @@ function AikyaCareMain() {
         }}
         defaultSymptoms={sosSymptoms}
         defaultDangerSigns={sosDangerSigns}
-      />
-
-      {/* AI Triage Modal */}
-      <TriageModal
-        isOpen={isTriageOpen}
-        onClose={() => setIsTriageOpen(false)}
-        onOpenSos={(symp, danger) => handleOpenSos(symp, danger)}
-        onBookAppointment={(specialist) => {
-          setCurrentRole('PATIENT');
-        }}
-        t={t}
-        language={language}
       />
 
       {/* Report Summarizer Modal */}
