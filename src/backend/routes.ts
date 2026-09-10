@@ -762,3 +762,9 @@ apiRouter.put('/notifications/:id/read', (req: Request, res: Response) => {
   if (notif) notif.isRead = true;
   res.json({ success: true });
 });
+
+// Fallback 404 for unhandled API endpoints
+apiRouter.use((req: Request, res: Response) => {
+  res.status(404).json({ success: false, error: `API endpoint ${req.method} ${req.originalUrl} not found` });
+});
+

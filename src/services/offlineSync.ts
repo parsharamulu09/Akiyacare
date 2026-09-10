@@ -20,7 +20,7 @@ class OfflineSyncEngine {
   private isSyncInProgress: boolean = false;
 
   constructor() {
-    this.simulatedOffline = localStorage.getItem(SIMULATE_OFFLINE_KEY) === 'true';
+    this.simulatedOffline = typeof window !== 'undefined' ? localStorage.getItem(SIMULATE_OFFLINE_KEY) === 'true' : false;
 
     if (typeof window !== 'undefined') {
       window.addEventListener('online', () => this.handleNetworkChange());
@@ -40,7 +40,9 @@ class OfflineSyncEngine {
 
   public toggleOfflineSimulation(forceOffline?: boolean): boolean {
     this.simulatedOffline = forceOffline !== undefined ? forceOffline : !this.simulatedOffline;
-    localStorage.setItem(SIMULATE_OFFLINE_KEY, String(this.simulatedOffline));
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(SIMULATE_OFFLINE_KEY, String(this.simulatedOffline));
+    }
     this.notify();
 
     if (!this.simulatedOffline && typeof navigator !== 'undefined' && navigator.onLine) {
@@ -50,6 +52,7 @@ class OfflineSyncEngine {
   }
 
   public getPendingQueue(): SyncQueueItem[] {
+    if (typeof window === 'undefined') return [];
     try {
       const data = localStorage.getItem(QUEUE_STORAGE_KEY);
       return data ? JSON.parse(data) : [];
@@ -59,7 +62,9 @@ class OfflineSyncEngine {
   }
 
   private saveQueue(queue: SyncQueueItem[]) {
-    localStorage.setItem(QUEUE_STORAGE_KEY, JSON.stringify(queue));
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(QUEUE_STORAGE_KEY, JSON.stringify(queue));
+    }
     this.notify();
   }
 
