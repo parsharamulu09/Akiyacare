@@ -32,6 +32,7 @@ export type AppointmentStatus =
   | 'SCHEDULED'
   | 'IN_PROGRESS'
   | 'COMPLETED'
+  | 'DISCHARGED'
   | 'CANCELLED';
 
 export type ReferralStatus = 'PENDING' | 'REVIEWED' | 'REFERRED' | 'COMPLETED';
@@ -196,6 +197,25 @@ export interface Appointment {
   reasonForVisit: string;
   clinicalNotes?: string;
   prescriptionGiven?: boolean;
+}
+
+export interface DischargeRecord {
+  id: string;
+  patientId: string;
+  patientName: string;
+  patientAge?: number;
+  patientGender?: string;
+  healthId?: string;
+  doctorId: string;
+  appointmentId?: string;
+  originalCase?: string;
+  diagnosis?: string;
+  treatmentSummary?: string;
+  prescriptionId?: string;
+  dischargeDate: string;
+  followUpDate?: string;
+  followUpInstructions?: string;
+  status: 'DISCHARGED';
 }
 
 export interface MedicalRecord {

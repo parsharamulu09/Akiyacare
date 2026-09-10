@@ -468,12 +468,35 @@ apiRouter.put('/ambulance/:id/status', authenticateToken, requireRole('AMBULANCE
 });
 
 // ==================== APPOINTMENTS & TELEMEDICINE ====================
-apiRouter.get('/appointments', (req: Request, res: Response) => {
-  const { patientId, doctorId } = req.query;
+apiRouter.get('/appointments', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
+  let { patientId, doctorId } = req.query;
+  if (req.user?.role === 'DOCTOR') doctorId = req.user.doctorId;
+  if (req.user?.role === 'PATIENT') patientId = req.user.patientId;
   let list = dbStore.appointments;
   if (patientId) list = list.filter(a => a.patientId === patientId);
   if (doctorId) list = list.filter(a => a.doctorId === doctorId);
   res.json({ success: true, appointments: list, doctors: dbStore.doctors });
+});
+
+apiRouter.get('/discharges', authenticateToken, requireRole('DOCTOR', 'ADMIN'), (req: AuthenticatedRequest, res: Response) => {
+  const doctorId = req.user?.role === 'ADMIN' ? String(req.query.doctorId || '') : req.user?.doctorId;
+  if (!doctorId) return res.status(400).json({ success: false, error: 'Doctor identity is required.' });
+  res.json({ success: true, discharges: dbStore.getDischargedPatients(doctorId) });
+});
+
+apiRouter.get('/discharges/patient/:patientId', authenticateToken, requireRole('PATIENT', 'DOCTOR', 'ADMIN'), (req: AuthenticatedRequest, res: Response) => {
+  if (req.user?.role === 'PATIENT' && req.user.patientId !== req.params.patientId) {
+    return res.status(403).json({ success: false, error: 'You are not authorized to view this discharge.' });
+  }
+  res.json({ success: true, discharges: dbStore.dischargeRecords.filter(record => record.patientId === req.params.patientId) });
+});
+
+apiRouter.post('/appointments/:id/discharge', authenticateToken, requireRole('DOCTOR', 'ADMIN'), (req: AuthenticatedRequest, res: Response) => {
+  const doctorId = req.user?.role === 'ADMIN' ? String(req.body.doctorId || '') : req.user?.doctorId;
+  if (!doctorId) return res.status(400).json({ success: false, error: 'Doctor identity is required.' });
+  const discharge = dbStore.dischargeAppointment(req.params.id, doctorId, req.body);
+  if (!discharge) return res.status(404).json({ success: false, error: 'Appointment not found for this doctor.' });
+  res.json({ success: true, discharge });
 });
 
 apiRouter.post('/appointments', (req: Request, res: Response) => {

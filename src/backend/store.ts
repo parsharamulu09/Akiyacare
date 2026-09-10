@@ -19,6 +19,7 @@ import {
   Prescription,
   HouseholdSurvey,
   Referral,
+  DischargeRecord,
   VillageHealthIndex,
   NotificationItem
 } from '../types';
@@ -72,6 +73,7 @@ class DatabaseStore {
   public prescriptions: Prescription[] = [];
   public householdSurveys: HouseholdSurvey[] = [];
   public referrals: Referral[] = [];
+  public dischargeRecords: DischargeRecord[] = [];
   public villageHealthIndices: VillageHealthIndex[] = [];
   public notifications: NotificationItem[] = [];
 
@@ -784,6 +786,49 @@ Serum Ferritin: 18 ng/mL (Low)`,
   }
 
   // Helper Methods
+  public getDischargedPatients(doctorId: string): DischargeRecord[] {
+    return this.dischargeRecords.filter(record => record.doctorId === doctorId);
+  }
+
+  public dischargeAppointment(appointmentId: string, doctorId: string, data: {
+    diagnosis?: string;
+    treatmentSummary?: string;
+    followUpDate?: string;
+    followUpInstructions?: string;
+  }): DischargeRecord | null {
+    const appointment = this.appointments.find(item => item.id === appointmentId && item.doctorId === doctorId);
+    if (!appointment) return null;
+
+    const existing = this.dischargeRecords.find(record => record.appointmentId === appointmentId);
+    if (existing) return existing;
+
+    const prescription = this.prescriptions.find(item => item.patientId === appointment.patientId && item.doctorId === doctorId);
+    const patient = this.patients.find(item => item.id === appointment.patientId);
+    const record: DischargeRecord = {
+      id: `dis-${Date.now()}`,
+      patientId: appointment.patientId,
+      patientName: appointment.patientName,
+      patientAge: patient?.age,
+      patientGender: patient?.gender,
+      healthId: patient?.id,
+      doctorId,
+      appointmentId,
+      originalCase: appointment.reasonForVisit,
+      diagnosis: data.diagnosis || prescription?.diagnosis,
+      treatmentSummary: data.treatmentSummary || prescription?.instructions,
+      prescriptionId: prescription?.id,
+      dischargeDate: new Date().toISOString(),
+      followUpDate: data.followUpDate || prescription?.followUpDate,
+      followUpInstructions: data.followUpInstructions || prescription?.instructions,
+      status: 'DISCHARGED'
+    };
+
+    appointment.status = 'DISCHARGED';
+    appointment.prescriptionGiven = Boolean(prescription);
+    this.dischargeRecords.unshift(record);
+    return record;
+  }
+
   public createEmergencyRequest(data: Omit<EmergencyRequest, 'id' | 'createdAt' | 'updatedAt' | 'etaMinutes' | 'status'>): EmergencyRequest {
     const id = `emg-${Date.now().toString().slice(-4)}`;
     const availableAmb = this.ambulances.find(a => a.isAvailable) || this.ambulances[0];
