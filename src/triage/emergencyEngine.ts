@@ -352,14 +352,26 @@ export function assessEmergencyRisk(input: TriageInput): TriageResult {
     duration: input.duration || 'Not specified',
     severity: input.severity || (finalScore > 60 ? 'severe' : finalScore > 30 ? 'moderate' : 'mild'),
     dangerSignsFound,
+    dangerSignsDetected: dangerSignsFound,
     possibleConcerns: dangerSignsFound.length > 0
       ? dangerSignsFound.map(ds => `Evaluation for ${ds}`)
       : ['Mild acute viral/functional syndrome', 'Sub-acute symptoms requiring observation'],
     recommendedAction,
+    recommendedTimeframe: finalScore >= 81 ? 'Immediate (< 15 mins)' : finalScore >= 61 ? 'Same Day (< 6 hours)' : finalScore >= 31 ? '24–48 Hours' : 'Routine / Home Care',
+    firstAidInstructions: finalScore >= 81
+      ? ['Keep patient in resting position with head elevated', 'Loosen tight clothing and ensure fresh air flow', 'Do not administer solid food or unprescribed fluids', 'Call 108 / Emergency SOS immediately']
+      : finalScore >= 61
+      ? ['Rest in comfortable position', 'Stay hydrated with clean water / ORS if appropriate', 'Proceed to nearest Community Health Center today']
+      : ['Continue oral hydration and adequate rest', 'Monitor temperature and symptoms every 4 hours'],
+    questionsForDoctor: [
+      'What specific diagnostic tests should be prioritized for these symptoms?',
+      'Are there warning signs that indicate immediate emergency hospital admission?',
+      'What precautions or supportive care should be followed at home?'
+    ],
     specialistRequired,
     reasoning,
     isSafetyRuleTriggered: hardCriticalTriggered,
-    scoreBreakdown: breakdown,
+    scoreBreakdown: breakdown.map(b => ({ ...b, factor: b.factor || b.component })),
     summary: hardCriticalTriggered
       ? `CRITICAL EMERGENCY: Severe danger signs detected (${dangerSignsFound.join(', ')}). Immediate hospital transfer and emergency stabilization required.`
       : `Triage evaluation concluded ${urgency} urgency (Risk Score: ${finalScore}/100). Recommended pathway: ${carePathway.replace(/_/g, ' ')}.`,

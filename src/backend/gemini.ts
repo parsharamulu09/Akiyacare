@@ -130,6 +130,7 @@ CRITICAL MEDICAL SAFETY:
     if (deterministicResult.isSafetyRuleTriggered || deterministicResult.urgency === 'RED') {
       return {
         ...deterministicResult,
+        dangerSignsDetected: deterministicResult.dangerSignsFound,
         extractedSymptoms: Array.from(new Set([...(aiData.symptoms || []), ...deterministicResult.extractedSymptoms])),
         summary: `EMERGENCY ALERT: ${deterministicResult.summary}`,
         possibleConcerns: aiData.possible_concerns || deterministicResult.possibleConcerns,
@@ -140,6 +141,7 @@ CRITICAL MEDICAL SAFETY:
     // Merge high-quality AI clinical extraction with deterministic scoring
     const mergedScore = Math.max(deterministicResult.riskScore, aiData.risk_score || 0);
     const urgency = (mergedScore >= 81 ? 'RED' : mergedScore >= 61 ? 'ORANGE' : mergedScore >= 31 ? 'YELLOW' : 'GREEN') as UrgencyLevel;
+    const dangerSigns = Array.from(new Set([...(aiData.danger_signs || []), ...deterministicResult.dangerSignsFound]));
 
     return {
       id: deterministicResult.id,
@@ -149,7 +151,8 @@ CRITICAL MEDICAL SAFETY:
       extractedSymptoms: aiData.symptoms?.length ? aiData.symptoms : deterministicResult.extractedSymptoms,
       duration: aiData.duration || deterministicResult.duration,
       severity: aiData.severity || deterministicResult.severity,
-      dangerSignsFound: Array.from(new Set([...(aiData.danger_signs || []), ...deterministicResult.dangerSignsFound])),
+      dangerSignsFound: dangerSigns,
+      dangerSignsDetected: dangerSigns,
       possibleConcerns: aiData.possible_concerns || deterministicResult.possibleConcerns,
       recommendedAction: aiData.recommended_action || deterministicResult.recommendedAction,
       specialistRequired: aiData.specialist || deterministicResult.specialistRequired,

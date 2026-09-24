@@ -453,19 +453,22 @@ export const TriageModal: React.FC<TriageModalProps> = ({
               })()}
 
               {/* Danger Signs Alert If Found */}
-              {result.dangerSignsDetected.length > 0 && (
-                <div className="p-3.5 bg-rose-50 border-2 border-rose-200 rounded-xl">
-                  <div className="flex items-center gap-2 text-rose-800 font-bold text-xs mb-1">
-                    <ShieldAlert className="w-4 h-4 text-rose-600" />
-                    <span>Deterministic Danger Signs Detected (Hard Override):</span>
+              {(() => {
+                const dangerSigns = result.dangerSignsFound || result.dangerSignsDetected || [];
+                return dangerSigns.length > 0 ? (
+                  <div className="p-3.5 bg-rose-50 border-2 border-rose-200 rounded-xl">
+                    <div className="flex items-center gap-2 text-rose-800 font-bold text-xs mb-1">
+                      <ShieldAlert className="w-4 h-4 text-rose-600" />
+                      <span>Deterministic Danger Signs Detected (Hard Override):</span>
+                    </div>
+                    <ul className="list-disc list-inside space-y-0.5 text-xs text-rose-950 font-medium">
+                      {dangerSigns.map((d, i) => (
+                        <li key={i}>{d}</li>
+                      ))}
+                    </ul>
                   </div>
-                  <ul className="list-disc list-inside space-y-0.5 text-xs text-rose-950 font-medium">
-                    {result.dangerSignsDetected.map((d, i) => (
-                      <li key={i}>{d}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+                ) : null;
+              })()}
 
               {/* Actionable Care Pathway Recommendation */}
               <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
@@ -495,7 +498,7 @@ export const TriageModal: React.FC<TriageModalProps> = ({
                   <div className="space-y-1.5">
                     {result.scoreBreakdown.map((item, idx) => (
                       <div key={idx} className="flex items-center justify-between text-xs py-1 border-b border-slate-100 last:border-none">
-                        <span className="text-slate-700 font-medium">{item.factor}</span>
+                        <span className="text-slate-700 font-medium">{item.factor || item.component}</span>
                         <span className="font-mono font-bold text-teal-800 bg-teal-50 px-2 py-0.5 rounded-md">
                           +{item.points} pts
                         </span>
@@ -539,7 +542,7 @@ export const TriageModal: React.FC<TriageModalProps> = ({
                   <button
                     onClick={() => {
                       onClose();
-                      onOpenSos(symptoms, result.dangerSignsDetected);
+                      onOpenSos(symptoms, result.dangerSignsFound || result.dangerSignsDetected || []);
                     }}
                     className="w-full py-3 bg-rose-600 hover:bg-rose-700 text-white font-extrabold rounded-xl text-sm shadow-md shadow-rose-600/30 flex items-center justify-center gap-2 cursor-pointer animate-pulse"
                   >

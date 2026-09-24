@@ -192,7 +192,7 @@ function AikyaCareMain() {
           <AshaPortal
             t={t}
             language={language}
-            onOpenSos={() => handleOpenSos()}
+            onOpenSos={(symptoms, dangerSigns) => handleOpenSos(symptoms, dangerSigns)}
           />
         )}
 
@@ -289,10 +289,60 @@ function AikyaCareMain() {
   );
 }
 
+class ErrorBoundary extends (React.Component as any) {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: any) {
+    console.error('AikyaCare Uncaught UI Error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+          <div className="max-w-md w-full bg-white rounded-3xl border border-slate-200 p-8 shadow-lg text-center space-y-4">
+            <div className="w-16 h-16 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center mx-auto">
+              <ShieldAlert className="w-8 h-8" />
+            </div>
+            <h2 className="text-xl font-black text-slate-900">Dashboard View Recovered</h2>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              An unexpected display issue occurred in this panel. All your clinical and offline survey data remains safely preserved.
+            </p>
+            {this.state.error?.message && (
+              <div className="p-3 bg-slate-100 rounded-xl text-left text-[11px] text-slate-700 font-mono overflow-auto max-h-24">
+                {this.state.error.message}
+              </div>
+            )}
+            <button
+              onClick={() => {
+                this.setState({ hasError: false, error: null });
+                window.location.reload();
+              }}
+              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer transition-colors"
+            >
+              Refresh & Reload Dashboard
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   return (
-    <AuthProvider>
-      <AikyaCareMain />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <AikyaCareMain />
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }

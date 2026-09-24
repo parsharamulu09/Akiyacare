@@ -25,7 +25,7 @@ import { TriageInput, TriageResult, HouseholdSurvey, Referral } from '../../type
 interface AshaPortalProps {
   t: TranslationDict;
   language: 'en' | 'te';
-  onOpenSos: () => void;
+  onOpenSos: (symptoms?: string, dangerSigns?: string[]) => void;
 }
 
 export const AshaPortal: React.FC<AshaPortalProps> = ({
@@ -451,20 +451,26 @@ export const AshaPortal: React.FC<AshaPortalProps> = ({
                   <p className="text-slate-900 font-semibold">{lastTriageResult.recommendedAction}</p>
                 </div>
 
-                {lastTriageResult.dangerSignsDetected.length > 0 && (
-                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-950">
-                    <span className="font-bold block mb-1">⚠️ Danger Signs Detected:</span>
-                    <ul className="list-disc list-inside space-y-0.5">
-                      {lastTriageResult.dangerSignsDetected.map((d, i) => (
-                        <li key={i}>{d}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+                {(() => {
+                  const dangerSigns = lastTriageResult.dangerSignsFound || lastTriageResult.dangerSignsDetected || [];
+                  return dangerSigns.length > 0 ? (
+                    <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-950">
+                      <span className="font-bold block mb-1">⚠️ Danger Signs Detected:</span>
+                      <ul className="list-disc list-inside space-y-0.5">
+                        {dangerSigns.map((d, i) => (
+                          <li key={i}>{d}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null;
+                })()}
 
                 {lastTriageResult.urgency === 'RED' && (
                   <button
-                    onClick={onOpenSos}
+                    onClick={() => {
+                      const dangerSigns = lastTriageResult.dangerSignsFound || lastTriageResult.dangerSignsDetected || [];
+                      onOpenSos(symptoms, dangerSigns);
+                    }}
                     className="w-full py-3 bg-rose-600 hover:bg-rose-700 text-white font-black text-xs sm:text-sm rounded-xl flex items-center justify-center gap-2 shadow-md shadow-rose-600/30 cursor-pointer animate-pulse"
                   >
                     <AlertTriangle className="w-4 h-4" />

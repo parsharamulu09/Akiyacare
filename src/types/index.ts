@@ -73,6 +73,7 @@ export interface DangerSignAlert {
 
 export interface RiskScoreBreakdown {
   component: string;
+  factor?: string;
   points: number;
   reason: string;
 }
@@ -88,8 +89,12 @@ export interface TriageResult {
   duration?: string;
   severity?: string;
   dangerSignsFound: string[];
+  dangerSignsDetected?: string[];
   possibleConcerns: string[];
   recommendedAction: string;
+  recommendedTimeframe?: string;
+  firstAidInstructions?: string[];
+  questionsForDoctor?: string[];
   specialistRequired?: string;
   reasoning: string[];
   isSafetyRuleTriggered: boolean;
